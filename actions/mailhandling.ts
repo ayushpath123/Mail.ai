@@ -21,7 +21,6 @@ const transporter = nodemailer.createTransport({
   });
 
 export  async function handleEmails({user_details,groqemails,mail_body}:mail_type) {
-        
         const {useremail}= user_details;
         const {subject,description}=mail_body;
         for (let i = 0; i < groqemails.length; i++) {
