@@ -29,7 +29,7 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
     setLoading(true);
     
     try {
-      const res = await axios.post('http://localhost:3000/api/backend/v2/userinfo/new_user', {
+      const res = await axios.post('/api/backend/v2/userinfo/new_user', {
         name,
         email,
         password,
