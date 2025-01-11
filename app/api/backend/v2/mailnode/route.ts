@@ -1,4 +1,5 @@
-import Hunterfn from "@/actions/hunterapi";
+// import Hunterfn from "@/actions/hunterapi";
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from 'zod'; 
 import { Groqfns } from "@/actions/prompt";
@@ -32,7 +33,8 @@ const inputValidation = z.object({
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest) {  
+    
     const body: inputschema = await req.json();
     const {user_id,first_name,last_name,domain,SMTP_USER,SMTP_PASSWORD,mail_body}=body;
     try{

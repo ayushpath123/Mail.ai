@@ -10,12 +10,13 @@ datasource db {
 model User {
   id          Int       @id @default(autoincrement())
   name        String
+  plan        Plan      @default(FREE)
   email       String    @unique
   password    String
-  SMTP_USER   String    @unique @default("")
-  SMTP_PASS   String    @unique @default("")
+  SMTP_USER   String    @default("")
+  SMTP_PASS   String    @default("")
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime  @default(now())
   emailsLogs  EmailLog[]
 }
 
@@ -40,3 +41,8 @@ model Email {
   emailLog    EmailLog  @relation(fields: [emailLogId], references: [day_id]) 
 }
 
+enum Plan{
+  FREE
+  PREMIUM
+  STANDARD
+}
