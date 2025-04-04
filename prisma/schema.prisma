@@ -9,12 +9,13 @@ datasource db {
 
 model User {
   id          Int       @id @default(autoincrement())
-  name        String
+  username    String
   plan        Plan      @default(FREE)
   email       String    @unique
   password    String
   SMTP_USER   String    @default("")
   SMTP_PASS   String    @default("")
+  imageUrl    String    @default("")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now())
   emailsLogs  EmailLog[]

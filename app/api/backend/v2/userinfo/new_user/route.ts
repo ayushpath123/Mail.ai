@@ -1,12 +1,12 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 export  async function POST(req: NextRequest) {
-  const { name, email, password } = await req.json();
+  const { username, email, password } = await req.json();
   try {
-    const res = await prisma.user.create({
+    const res = await db.user.create({
       data: {
-        name,
+        username,
         email,
         password,
         // SMTP_USER:"",

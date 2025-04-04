@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AuthDialog } from "@/components/auth/auth-dialog";
-import { Mail, Moon, Sun } from "lucide-react";
+import { LogOut, Mail, Moon, Sun } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
 
 interface NavbarProps {
   isDarkMode: boolean;
@@ -12,7 +13,7 @@ interface NavbarProps {
 
 export function Navbar({ isDarkMode, toggleTheme }: NavbarProps) {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-
+  const {data:session}=useSession();
   return (
     <>
       <nav className="fixed top-0 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b">
@@ -39,7 +40,23 @@ export function Navbar({ isDarkMode, toggleTheme }: NavbarProps) {
             <Button variant="ghost" size="icon" onClick={toggleTheme}>
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-            <Button onClick={() => setIsAuthOpen(true)}>Sign In</Button>
+          
+          {
+            session ? (
+              <div className="flex flex-col items-center justify-center gap-4 py-6">
+           <Button className="bg-black text-white hover:bg-gray-900" variant="destructive" onClick={()=>{
+            signOut({callbackUrl:'/'
+            })
+           }}>
+  <LogOut color="white" className="w-4 h-4 mr-2" /> Logout
+</Button>
+
+          </div>
+            ):(
+              <div><Button onClick={() => setIsAuthOpen(true)}>Sign In</Button></div>
+            )
+          }
+            
           </div>
         </div>
       </nav>

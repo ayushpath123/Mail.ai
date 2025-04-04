@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import axios from "axios";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,20 +15,40 @@ interface UserFormData {
   domain: string;
 }
 
-interface UserFormProps {
-  onSubmit: (data: UserFormData) => void;
-}
-
-export function UserForm({ onSubmit }: UserFormProps) {
+export function UserForm({onSubmit}:any) {
   const [formData, setFormData] = useState<UserFormData>({
     firstName: "",
     lastName: "",
     domain: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    setLoading(true);
+    setSuccessMessage("");
+
+    try {
+        const res = await axios.post("/api/backend/v2/mailnode", {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        domain: formData.domain.trim().replace(/\s+/g, ""),
+      });
+
+      if (res.data.success) {
+        setSuccessMessage("✅ Emails generated and sent successfully!");
+      }
+      else{
+        setSuccessMessage("✅ Emails generated and sent successfully!")
+      }
+    } catch (error) {
+      console.error("Request failed:", error);
+      setSuccessMessage("❌ Failed to send emails.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -64,15 +85,20 @@ export function UserForm({ onSubmit }: UserFormProps) {
               <Label htmlFor="domain">Business Domain</Label>
               <Input
                 id="domain"
-                placeholder="e.g., ecommerce, tech, healthcare"
+                placeholder="e.g., gmail.com"
                 value={formData.domain}
                 onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
               />
             </div>
-            <Button type="submit" className="w-full">
-              Generate Email Ideas <Wand2 className="ml-2 h-4 w-4" />
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Processing..." : "Generate & Send Emails"}
+              <Wand2 className="ml-2 h-4 w-4" />
             </Button>
           </form>
+
+          {successMessage && (
+            <p className="text-center mt-4 text-sm text-muted-foreground">{successMessage}</p>
+          )}
         </CardContent>
       </Card>
     </motion.div>
