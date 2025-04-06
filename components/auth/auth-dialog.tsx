@@ -37,7 +37,7 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
       });
 
       if (res.status === 200) {
-        router.push('/mailnode');
+        router.push('/');
       } else {
         window.location.reload();
       }
