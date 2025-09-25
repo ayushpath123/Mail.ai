@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json first for efficient caching
 COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm install --frozen-lockfile
+# Install dependencies (clean, reproducible)
+RUN npm ci
 
 # Copy the rest of the application
 COPY . .
@@ -22,14 +22,16 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
-# Copy built application from the builder stage
-COPY --from=builder /app . 
+ENV NODE_ENV=production
+ENV PORT=3000
 
-# Install only production dependencies
-RUN npm install --only=production
+# Copy standalone server and assets
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
 # Expose the port Next.js runs on
 EXPOSE 3000
 
-# Start the application
-CMD ["npm", "run", "start"]
+# Start the standalone server
+CMD ["node", "server.js"]

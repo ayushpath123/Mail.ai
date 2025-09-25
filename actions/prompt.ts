@@ -11,39 +11,27 @@ const together = new Together({
   apiKey: process.env.TOGETHER_API_KEY,
 });
 
-export async function Groqfns({ first_name, last_name, domain }: inputSchema) {
-  const prompt = `Generate **exactly 10 unique professional email suggestions** based strictly on the following input:
+export async function Groqfns({ first_name, last_name, domain, custom_prompt }: inputSchema & { custom_prompt?: string }) {
+  const prompt = custom_prompt || `Generate **exactly 10 unique professional email suggestions** based strictly on the following input:
 
   - **First Name**: ${first_name}
   - **Last Name**: ${last_name}
   - **Domain**: ${domain}
   
-  ### ✅ Allowed Patterns (Only these 10 — absolutely no other formats allowed):
-  1. first_name@domain  
-  2. first_namelast_name@domain  
-  3. first_name_lastname@domain  
-  4. first_namelast@domain  
-  5. first_name_last@domain  
-  6. last_name@domain  
-  7. last_namefirst@domain  
-  8. firstnamelastname@domain  
-  9. lastfirstnam@domain  
-  10. firstnamelast@domain  
-  
-  ### 🚨 STRICT RULES:
-  - Use **only** the 10 allowed patterns above — no others, no exceptions.
-  - ⚠️ **No duplicates** — all 10 emails must be completely **unique** in structure and content.
-  - ❌ Do **not** use nicknames, initials, numbers, random characters, or extra variations.
-  - ❌ Do **not** repeat the same format with different separators.
-  - ❌ Do **not** include any explanation, notes, or headings.
-  - ✅ Output **only 10 email addresses**, numbered **1 through 10**, each on a new line.
-  
-  ### Output Format:
-  1. example@domain.com  
-  2. example.lastname@domain.com  
-  ...  
-  10. lastfirstnam@domain.com
-  `;
+  ### ✅ Professional Email Patterns (Only these 10 — absolutely no other formats allowed):
+  1. firstname.lastname@domain (e.g., john.doe@company.com)
+  2. firstname@domain (e.g., john@company.com)
+  3. firstnamelastname@domain (e.g., johndoe@company.com)
+  4. firstname_lastname@domain (e.g., john_doe@company.com)
+  5. lastname.firstname@domain (e.g., doe.john@company.com)
+  6. firstinitial.lastname@domain (e.g., j.doe@company.com)
+  7. firstname_last@domain (e.g., john_d@company.com)
+  8. firstinitiallastname@domain (e.g., jdoe@company.com)
+  9. lastname@domain (e.g., doe@company.com)
+  10. firstname.last@domain (e.g., john.d@company.com)
+
+  ### 📧 Response Format:
+  Return ONLY the 10 email addresses, one per line, with no additional text, explanations, or formatting.`;
   
 
   try {

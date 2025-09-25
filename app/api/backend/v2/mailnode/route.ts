@@ -4,15 +4,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from 'zod'; 
 import { Groqfns } from "@/actions/prompt";
 import { handleEmails } from "@/actions/mailhandling";
+import { db } from "@/lib/prisma";
 
 type inputschema = {
-  user_id:number,
+  user_id?:number,
   first_name: string,
   last_name: string,
   domain: string,
-  SMTP_USER: string,
-  SMTP_PASSWORD: string,
-  mail_body:{
+  SMTP_USER?: string,
+  SMTP_PASSWORD?: string,
+  custom_prompt?: string,
+  mail_body?:{
     subject:string,
     description:string
   }
@@ -36,30 +38,35 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {  
     
     const body: inputschema = await req.json();
-    const {first_name,last_name,domain}=body;
-    // try{
-    //   const zodValidation = inputValidation.parse(body);
-    // }catch(error){
-    //   if(error instanceof z.ZodError){
-    //      const errormessages=error.errors.map(e=>e.message);
-    //      return NextResponse.json({
-    //       msg:"Validation Failed"
-    //      },{
-    //      status:501
-    //      })
-    //   }
-    // }
-    // const hunterres=await Hunterfn({
-    //   first_name,last_name,domain
-    // })
+    const {first_name,last_name,domain,custom_prompt}=body;
+    
+    // Load user resume details if available
+    let resumeUrl: string | undefined;
+    let resumeText: string | undefined;
+    if (body.user_id) {
+      try {
+        const user = await db.user.findUnique({
+          where: { id: Number(body.user_id) },
+          select: { resumeUrl: true, resumeText: true }
+        });
+        resumeUrl = user?.resumeUrl || undefined;
+        resumeText = user?.resumeText || undefined;
+      } catch {}
+    }
 
-    const mail_body = {
+    // Generate emails using custom prompt or default
+    const groqemails=await Groqfns({
+      first_name,last_name,domain,custom_prompt
+    })
+
+    // Generate personalized content using custom prompt or resumeText
+    let mail_body = {
       subject: "Application for Summer Internship",
       description: `Dear Hiring Team,
     
     I hope this message finds you well. I am reaching out to express my interest in a software development internship at your organization.
     
-    I have hands-on experience building full-stack applications using technologies like Next.js, React, Node.js, Express, Prisma, and PostgreSQL. Through various personal and collaborative projects, I’ve focused on solving real-world problems with clean, efficient code. I’m also proficient with tools like Docker, GitHub, CI/CD pipelines, and cloud deployment.
+    I have hands-on experience building full-stack applications using technologies like Next.js, React, Node.js, Express, Prisma, and PostgreSQL. Through various personal and collaborative projects, I've focused on solving real-world problems with clean, efficient code. I'm also proficient with tools like Docker, GitHub, CI/CD pipelines, and cloud deployment.
     
     I am eager to contribute to a growth-oriented team, learn from experienced engineers, and take on new challenges. I am confident in my ability to adapt quickly, work independently or in teams, and bring value through technical and problem-solving skills.
     
@@ -68,41 +75,78 @@ export async function POST(req: NextRequest) {
     Best regards,  
     Ayush Pathak`
     }
-    
 
-    const groqemails=await Groqfns({
-      first_name,last_name,domain
-    })
-    
-    // const hunterEmail=hunterres?.email
-    // const allEmails = Array.from(new Set([...(groqemails || []), ...(hunterEmail ? [hunterEmail] : [])]));
-    
-    //console.log(allEmails);
+    // If custom prompt is provided, generate personalized content
+    if (custom_prompt) {
+      try {
+        const contentResponse = await Groqfns({
+          first_name: "Content",
+          last_name: "Generator",
+          domain: "content.com",
+          custom_prompt: `Generate a professional email based on this context: ${custom_prompt}
+          
+          Please provide:
+          1. A compelling subject line
+          2. A professional email body that incorporates the context
+          
+          Format as JSON:
+          {
+            "subject": "Subject line here",
+            "description": "Email body here"
+          }`
+        });
 
-    const user_details={
-      useremail:"ayushpathak308@gmail.com",
-      user_id:213213
+        // Try to parse the response as JSON
+        try {
+          const contentData = JSON.parse(contentResponse as any);
+          if (contentData.subject && contentData.description) {
+            mail_body = {
+              subject: contentData.subject,
+              description: contentData.description
+            };
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, use the response as description
+          mail_body = {
+            subject: `Regarding: ${custom_prompt.substring(0, 40)}`,
+            description: Array.isArray(contentResponse) ? contentResponse.join("\n") : String(contentResponse)
+          };
+        }
+      } catch (error) {
+        console.error('Error generating personalized content:', error);
+      }
     }
+    // If no custom prompt but resumeText exists, build a personalized body from resume
+    else if (resumeText) {
+      const intro = `Dear Hiring Team,\n\nI am reaching out to express my interest in opportunities at your organization. Below is a brief summary based on my resume:`;
+      const summary = resumeText.slice(0, 1200); // keep reasonable length
+      mail_body = {
+        subject: `Application from ${first_name} ${last_name}`,
+        description: `${intro}\n\n${summary}\n\nI have attached my CV for your review.\n\nBest regards,\n${first_name} ${last_name}`
+      };
+    }
+    
+    // Only send emails if SMTP credentials are provided
+    if (body.SMTP_USER && body.SMTP_PASSWORD && body.user_id) {
+      const user_details={
+        useremail:"ayushpathak308@gmail.com",
+        user_id: body.user_id
+      }
 
-    //Prisma Logic here
+      handleEmails({
+        user_details,
+        groqemails,
+        mail_body,
+        attachmentPath: resumeUrl,
+      });
+    }
     
-    handleEmails({
-    user_details,
-    groqemails,
-    mail_body,
-    }); 
-    
-    // if(!checker){
-    //   return NextResponse.json({
-    //     msg:"Error",
-    //     emails:"Grog emails :"+groqemails
-    //   },{
-    //     status:501
-    //   })
-    // }
     return NextResponse.json({
-      msg:"Email Sent Successfull",
-      emails:"Grog emails :"+groqemails
+      msg:"Content Generated Successfully",
+      emails: groqemails,
+      subject: mail_body.subject,
+      description: mail_body.description,
+      resumeUrl: resumeUrl || null
     },{
       status:200
     })

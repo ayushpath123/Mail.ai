@@ -7,7 +7,6 @@ import { FeaturesSection } from "@/components/sections/features";
 import { FeatureShowcase } from "@/components/sections/features/feature-showcase";
 import { StatsSection } from "@/components/sections/interactive/stats-section";
 import { WorkflowSection } from "@/components/sections/interactive/workflow-section";
-import { EmailLabSection } from "@/components/sections/email-lab/email-lab-section";
 import { TemplateSection } from "@/components/sections/templates/template-section";
 import { PricingSection } from "@/components/sections/pricing";
 import { TestimonialsSection } from "@/components/sections/testimonials";
@@ -31,7 +30,6 @@ export default function Home() {
         <FeaturesSection />
         <FeatureShowcase />
         <WorkflowSection />
-        <EmailLabSection />
         <TemplateSection />
         <PricingSection />
         <TestimonialsSection />

@@ -28,14 +28,12 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
   const handlesubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const res = await axios.post('/api/backend/v2/userinfo/new_user', {
         name,
         email,
         password,
       });
-
       if (res.status === 200) {
         router.push('/');
       } else {

@@ -16,6 +16,8 @@ model User {
   SMTP_USER   String    @default("")
   SMTP_PASS   String    @default("")
   imageUrl    String    @default("")
+  resumeUrl   String    @default("")
+  resumeText  String    @default("")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now())
   emailsLogs  EmailLog[]

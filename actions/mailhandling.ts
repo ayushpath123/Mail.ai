@@ -10,6 +10,7 @@ type mail_type = {
     subject: string;
     description: string;
   };
+  attachmentPath?: string; // public path like /uploads/...
 };
 
 const transporter = nodemailer.createTransport({
@@ -20,7 +21,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export async function handleEmails({ user_details, groqemails, mail_body }: mail_type) {
+export async function handleEmails({ user_details, groqemails, mail_body, attachmentPath }: mail_type) {
   const { subject, description } = mail_body;
 
   for (let i = 0; i < groqemails.length; i++) {
@@ -30,6 +31,15 @@ export async function handleEmails({ user_details, groqemails, mail_body }: mail
       to: mailide,
       subject,
       text: description,
+      attachments: attachmentPath
+        ? [
+            {
+              filename: attachmentPath.split('/').pop() || 'cv.pdf',
+              path: attachmentPath.startsWith('/') ? `.${attachmentPath}` : attachmentPath,
+              contentType: 'application/pdf',
+            },
+          ]
+        : undefined,
     };
 
     try {

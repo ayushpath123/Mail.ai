@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt'; // Import bcrypt for hashing
 import { db } from "@/lib/prisma";
 
 export const NEXT_AUTH = {
+  debug: process.env.NODE_ENV !== 'production',
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -89,15 +90,22 @@ export const NEXT_AUTH = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      authorization: {
+        params: {
+          prompt: 'consent',
+          access_type: 'offline',
+          response_type: 'code',
+        }
+      },
       async profile(profile) {
-        const email = profile.email || "";
-        const username = profile.name.replace(/\s+/g, '').toLowerCase();
-        const imageUrl = profile.picture;
+        const email = profile.email;
+        if (!email) {
+          throw new Error('Google did not return an email. Ensure the Google OAuth app has the email scope and the account has a visible email.');
+        }
+        const username = (profile.name || '').replace(/\s+/g, '').toLowerCase() || email.split('@')[0];
+        const imageUrl = profile.picture || '';
 
-        let user = await db.user.findUnique({
-          where: { email },
-        });
-
+        let user = await db.user.findUnique({ where: { email } });
         if (!user) {
           user = await db.user.create({
             data: {
