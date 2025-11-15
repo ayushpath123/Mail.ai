@@ -1,19 +1,6 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import { db } from '@/lib/prisma';
 
-interface EmailJobData {
-  email: string;
-  recipientName?: string;
-  companyName?: string;
-  mail_body: {
-    subject: string;
-    description: string;
-    html_body?: string;
-  };
-  user_id: number;
-  campaign_id: string;
-}
-
 interface SendEmailsResult {
   success: boolean;
   sent: number;
@@ -93,7 +80,13 @@ export const sendEmailsDirectly = async (
         result.sent++;
 
         // Log email to database
-        await logEmailToDatabase(user_id, email, mail_body.subject, campaign_id);
+        await logEmailToDatabase({
+          user_id,
+          email,
+          subject: mail_body.subject,
+          campaign_id,
+          status: 'success'
+        });
 
         // Add a small delay to avoid rate limiting
         if (i < emails.length - 1) {
@@ -103,7 +96,16 @@ export const sendEmailsDirectly = async (
       } catch (error) {
         console.error(`Error sending email to ${email}:`, error);
         result.failed++;
-        result.errors.push(`Failed to send to ${email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        result.errors.push(`Failed to send to ${email}: ${errorMessage}`);
+        await logEmailToDatabase({
+          user_id,
+          email,
+          subject: mail_body.subject,
+          campaign_id,
+          status: 'failed',
+          error: errorMessage
+        });
       }
     }
 
@@ -120,12 +122,21 @@ export const sendEmailsDirectly = async (
 };
 
 // Log email to database
-const logEmailToDatabase = async (
-  user_id: number,
-  email: string,
-  subject: string,
-  campaign_id: string
-) => {
+const logEmailToDatabase = async ({
+  user_id,
+  email,
+  subject,
+  campaign_id,
+  status,
+  error
+}: {
+  user_id: number;
+  email: string;
+  subject: string;
+  campaign_id: string;
+  status: 'success' | 'failed';
+  error?: string;
+}) => {
   try {
     // Get or create email log for today
     const today = new Date();
@@ -139,29 +150,65 @@ const logEmailToDatabase = async (
     });
 
     if (!emailLog) {
-      emailLog = await db.emailLog.create({
-        data: {
-          userId: user_id,
-          date: today,
-          noOfEmails: 0
+      try {
+        emailLog = await db.emailLog.create({
+          data: {
+            userId: user_id,
+            date: today,
+            noOfEmails: 0,
+            failedEmails: 0
+          }
+        });
+      } catch (createError: any) {
+        // Handle case where failedEmails column doesn't exist
+        if (createError?.code === 'P2022' || createError?.message?.includes('failedEmails')) {
+          console.warn('failedEmails column not found, creating without it');
+          emailLog = await db.emailLog.create({
+            data: {
+              userId: user_id,
+              date: today,
+              noOfEmails: 0
+            }
+          });
+        } else {
+          throw createError;
         }
-      });
+      }
     }
 
-    // Create email record
-    await db.email.create({
-      data: {
-        emailLogId: emailLog.day_id,
-        recipient: email,
-        subject: subject
-      }
-    });
+    if (status === 'success') {
+      await db.email.create({
+        data: {
+          emailLogId: emailLog.day_id,
+          recipient: email,
+          subject: subject
+        }
+      });
 
-    // Update email count
-    await db.emailLog.update({
-      where: { day_id: emailLog.day_id },
-      data: { noOfEmails: emailLog.noOfEmails + 1 }
-    });
+      await db.emailLog.update({
+        where: { day_id: emailLog.day_id },
+        data: { noOfEmails: emailLog.noOfEmails + 1 }
+      });
+    } else {
+      // Update failed emails count - handle case where column might not exist
+      try {
+        await db.emailLog.update({
+          where: { day_id: emailLog.day_id },
+          data: { failedEmails: (emailLog.failedEmails || 0) + 1 }
+        });
+      } catch (updateError: any) {
+        // If failedEmails column doesn't exist, just log the error
+        if (updateError?.code === 'P2022' || updateError?.message?.includes('failedEmails')) {
+          console.warn('failedEmails column not found in database. Please run migration.');
+        } else {
+          throw updateError;
+        }
+      }
+
+      if (error) {
+        console.warn(`Email send failure logged for ${email}: ${error}`);
+      }
+    }
   } catch (error) {
     console.error('Error logging email to database:', error);
   }

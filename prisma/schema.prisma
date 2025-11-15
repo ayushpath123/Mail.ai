@@ -28,6 +28,7 @@ model EmailLog {
   userId       Int
   date         DateTime  @default(now())
   noOfEmails   Int
+  failedEmails Int       @default(0)
   user         User      @relation(fields: [userId], references: [id])
   emails       Email[]   
   

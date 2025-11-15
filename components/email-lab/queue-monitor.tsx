@@ -37,6 +37,7 @@ export function QueueMonitor() {
   const [campaigns, setCampaigns] = useState<Array<{ id: string; status: CampaignStatus; name: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fakeSendingEmails, setFakeSendingEmails] = useState<{ [key: string]: { current: number; total: number; emails: string[]; batchProgress: number } }>({});
 
   const fetchQueueStatus = async () => {
     try {
@@ -69,6 +70,85 @@ export function QueueMonitor() {
       console.error('Error fetching campaigns:', error);
     }
   };
+
+  // Simulate fake email sending activity for processing campaigns
+  useEffect(() => {
+    const processingCampaigns = campaigns.filter(c => c.status.status === 'processing');
+    
+    if (processingCampaigns.length > 0) {
+      const fakeData: { [key: string]: { current: number; total: number; emails: string[]; batchProgress: number } } = {};
+      
+      processingCampaigns.forEach(campaign => {
+        const total = campaign.status.total;
+        const sent = campaign.status.sent;
+        const remaining = total - sent;
+        
+        // Generate fake email addresses being sent
+        const fakeEmails = Array.from({ length: Math.min(remaining, 5) }, (_, i) => {
+          const domains = ['example.com', 'test.com', 'demo.com', 'mail.com'];
+          const names = ['john', 'jane', 'bob', 'alice', 'charlie', 'diana', 'eve', 'frank'];
+          const randomName = names[Math.floor(Math.random() * names.length)];
+          const randomDomain = domains[Math.floor(Math.random() * domains.length)];
+          return `${randomName}${i + 1}@${randomDomain}`;
+        });
+        
+        // Calculate batch progress: shows 1-10 for current batch
+        // If sent = 0, show 1/10; if sent = 5, show 6/10; if sent = 10, show 1/10 (next batch)
+        const batchProgress = sent === 0 ? 1 : ((sent % 10) === 0 ? 10 : (sent % 10));
+        
+        fakeData[campaign.id] = {
+          current: sent,
+          total: total,
+          emails: fakeEmails,
+          batchProgress: batchProgress
+        };
+      });
+      
+      setFakeSendingEmails(fakeData);
+      
+      // Simulate progress updates every 2 seconds
+      const progressInterval = setInterval(() => {
+        setFakeSendingEmails(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(campaignId => {
+            const campaign = campaigns.find(c => c.id === campaignId);
+            if (campaign && campaign.status.status === 'processing') {
+              const record = updated[campaignId] ?? {
+                current: campaign.status.sent,
+                total: campaign.status.total,
+                emails: [],
+                batchProgress: campaign.status.sent === 0 ? 1 : ((campaign.status.sent % 10) === 0 ? 10 : (campaign.status.sent % 10))
+              };
+              const current = record.current;
+              const total = record.total;
+              
+              if (current < total) {
+                const increment = Math.min(Math.floor(Math.random() * 2) + 1, total - current);
+                const newCurrent = current + increment;
+                // Calculate batch progress: 1-10 for current batch
+                const nextBatchProgress = newCurrent === 0 ? 1 : ((newCurrent % 10) === 0 ? 10 : (newCurrent % 10));
+                
+                // Simulate sending progress
+                updated[campaignId] = {
+                  ...record,
+                  current: newCurrent,
+                  batchProgress: nextBatchProgress,
+                  emails: record.emails.slice(1).concat([
+                    `user${Math.floor(Math.random() * 1000)}@example.com`
+                  ])
+                };
+              }
+            }
+          });
+          return updated;
+        });
+      }, 2000);
+      
+      return () => clearInterval(progressInterval);
+    } else {
+      setFakeSendingEmails({});
+    }
+  }, [campaigns]);
 
   useEffect(() => {
     fetchQueueStatus();
@@ -143,10 +223,30 @@ export function QueueMonitor() {
                 <div className="text-2xl font-bold text-blue-600">{queueStatus.waiting}</div>
                 <div className="text-sm text-muted-foreground">Waiting</div>
               </div>
-              <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-600">{queueStatus.active}</div>
+              <motion.div 
+                className="text-center p-4 bg-yellow-50 rounded-lg"
+                animate={queueStatus.active > 0 ? {
+                  scale: [1, 1.05, 1],
+                } : {}}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              >
+                <div className="text-2xl font-bold text-yellow-600 flex items-center justify-center gap-2">
+                  {queueStatus.active}
+                  {queueStatus.active > 0 && (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    >
+                      <Activity className="h-5 w-5" />
+                    </motion.div>
+                  )}
+                </div>
                 <div className="text-sm text-muted-foreground">Active</div>
-              </div>
+              </motion.div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
                 <div className="text-2xl font-bold text-green-600">{queueStatus.completed}</div>
                 <div className="text-sm text-muted-foreground">Completed</div>
@@ -186,7 +286,18 @@ export function QueueMonitor() {
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        {getStatusIcon(campaign.status.status)}
+                        <motion.div
+                          animate={campaign.status.status === 'processing' ? {
+                            scale: [1, 1.2, 1],
+                          } : {}}
+                          transition={{
+                            duration: 1.5,
+                            repeat: campaign.status.status === 'processing' ? Infinity : 0,
+                            ease: "easeInOut"
+                          }}
+                        >
+                          {getStatusIcon(campaign.status.status)}
+                        </motion.div>
                         <span className="font-medium">{campaign.name}</span>
                         <Badge 
                           variant="secondary" 
@@ -200,10 +311,54 @@ export function QueueMonitor() {
                       </span>
                     </div>
                     
-                    <Progress 
-                      value={campaign.status.progress} 
-                      className="mb-3" 
-                    />
+                    <div className="mb-3">
+                      <Progress 
+                        value={campaign.status.progress} 
+                        className="mb-2" 
+                      />
+                      {campaign.status.status === 'processing' && fakeSendingEmails[campaign.id] && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-xs text-muted-foreground space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <motion.div
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                className="w-3 h-3"
+                              >
+                                <Mail className="h-3 w-3 text-blue-500" />
+                              </motion.div>
+                              <span>Sending emails...</span>
+                            </div>
+                            <motion.span
+                              key={fakeSendingEmails[campaign.id].batchProgress}
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="text-xs font-semibold text-blue-600"
+                            >
+                              {fakeSendingEmails[campaign.id].batchProgress}/10
+                            </motion.span>
+                          </div>
+                          <AnimatePresence mode="popLayout">
+                            {fakeSendingEmails[campaign.id].emails.slice(0, 3).map((email, idx) => (
+                              <motion.div
+                                key={`${email}-${idx}`}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                transition={{ duration: 0.5 }}
+                                className="text-xs text-blue-600 pl-5 truncate"
+                              >
+                                → {email}
+                              </motion.div>
+                            ))}
+                          </AnimatePresence>
+                        </motion.div>
+                      )}
+                    </div>
                     
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       <div className="text-center">
@@ -258,15 +413,40 @@ export function QueueMonitor() {
                 Healthy
               </Badge>
             </div>
-            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+            <motion.div 
+              className="flex items-center justify-between p-3 bg-green-50 rounded-lg"
+              animate={{
+                boxShadow: [
+                  "0 0 0px rgba(34, 197, 94, 0)",
+                  "0 0 10px rgba(34, 197, 94, 0.3)",
+                  "0 0 0px rgba(34, 197, 94, 0)"
+                ]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            >
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <motion.div 
+                  className="w-2 h-2 bg-green-500 rounded-full"
+                  animate={{
+                    scale: [1, 1.5, 1],
+                    opacity: [1, 0.7, 1]
+                  }}
+                  transition={{
+                    duration: 1.5,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                ></motion.div>
                 <span className="font-medium">Email Service</span>
               </div>
               <Badge variant="secondary" className="bg-green-100 text-green-800">
                 Active
               </Badge>
-            </div>
+            </motion.div>
           </div>
         </CardContent>
       </Card>

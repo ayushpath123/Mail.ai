@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
       call_to_action,
       sender_name,
       sender_company,
-      target_domain
+      target_domain,
+      target_company
     } = body;
 
     if (!purpose || !recipient_type) {
@@ -47,7 +48,9 @@ export async function POST(req: NextRequest) {
     });
 
     let cv_profile = null;
-    if (user?.resumeText) {
+    let cv_raw_text: string | null = null;
+    if (user?.resumeText && user.resumeText.trim().length > 0) {
+      cv_raw_text = user.resumeText;
       try {
         cv_profile = JSON.parse(user.resumeText);
         console.log('CV Profile loaded:', cv_profile ? 'Yes' : 'No');
@@ -75,7 +78,9 @@ export async function POST(req: NextRequest) {
       sender_name,
       sender_company,
       target_domain,
-      cv_profile
+      target_company,
+      cv_profile,
+      cv_raw_text
     });
 
     return NextResponse.json({

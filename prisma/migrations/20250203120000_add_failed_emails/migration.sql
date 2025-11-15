@@ -1,0 +1,3 @@
+ALTER TABLE "EmailLog"
+ADD COLUMN "failedEmails" INTEGER NOT NULL DEFAULT 0;
+

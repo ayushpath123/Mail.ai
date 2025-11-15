@@ -21,6 +21,7 @@ const campaignInputSchema = z.object({
   tone: z.enum(['professional', 'casual', 'friendly', 'formal']).default('professional'),
   key_points: z.array(z.string()).optional(),
   call_to_action: z.string().optional(),
+  target_company: z.string().optional(),
   
   // Campaign settings
   campaign_name: z.string().min(1, "Campaign name is required"),
@@ -31,7 +32,11 @@ const campaignInputSchema = z.object({
     email: z.string().email(),
     name: z.string().optional(),
     company: z.string().optional()
-  })).optional()
+  })).optional(),
+  
+  // Optional pre-edited email content (if user edited the template)
+  email_subject: z.string().optional(),
+  email_description: z.string().optional()
 });
 
 export const dynamic = "force-dynamic";
@@ -84,8 +89,11 @@ export async function POST(req: NextRequest) {
       key_points,
       call_to_action,
       campaign_name,
+      target_company,
       personalize_emails,
-      recipient_data
+      recipient_data,
+      email_subject,
+      email_description
     } = validationResult.data;
 
     console.log('=== VALIDATION SUCCESS ===');
@@ -96,6 +104,7 @@ export async function POST(req: NextRequest) {
       purpose,
       recipient_type,
       campaign_name,
+      target_company,
       recipient_data_count: recipient_data?.length || 0
     });
     console.log('=== END VALIDATION SUCCESS ===');
@@ -132,12 +141,12 @@ export async function POST(req: NextRequest) {
     });
 
     const planLimits = {
-      FREE: 50,
+      FREE: 1000,
       STANDARD: 500,
       PREMIUM: 2000
     };
 
-    const dailyLimit = planLimits[user.plan as keyof typeof planLimits] || 50;
+    const dailyLimit = planLimits[user.plan as keyof typeof planLimits] || 1000;
     const emailsSentToday = todayEmails?.noOfEmails || 0;
 
     // Generate email addresses
@@ -169,36 +178,62 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch user's CV profile for personalization
-    console.log('Fetching CV profile for user:', user_id);
+    console.log('=== FETCHING CV PROFILE ===');
+    console.log('User ID:', user_id);
     const userProfile = await db.user.findUnique({
       where: { id: user_id },
       select: { resumeText: true }
     });
 
     let cv_profile = null;
-    if (userProfile?.resumeText) {
+    let cv_raw_text: string | null = null;
+    
+    if (userProfile?.resumeText && userProfile.resumeText.trim().length > 0) {
+      console.log('Resume text found, length:', userProfile.resumeText.length);
+      cv_raw_text = userProfile.resumeText;
       try {
         cv_profile = JSON.parse(userProfile.resumeText);
-        console.log('CV Profile loaded for email generation:', cv_profile ? 'Yes' : 'No');
+        console.log('CV Profile parsed successfully:', !!cv_profile);
+        if (cv_profile) {
+          console.log('CV Profile keys:', Object.keys(cv_profile));
+          console.log('Has summary:', !!cv_profile.summary);
+          console.log('Has experience:', Array.isArray(cv_profile.experience) && cv_profile.experience.length > 0);
+        }
       } catch (e) {
-        console.error('Error parsing CV profile:', e);
+        console.error('Error parsing CV profile as JSON, using raw text:', e);
+        // If JSON parsing fails, cv_raw_text will still be used
       }
+    } else {
+      console.warn('No resume text found for user:', user_id);
     }
+    console.log('=== CV PROFILE LOADING COMPLETE ===');
 
-    // Generate email content using AI
-    console.log('Generating email content...');
-    const emailContent = await generateEmailContent({
-      purpose,
-      recipient_type,
-      industry,
-      tone,
-      key_points,
-      call_to_action,
-      sender_name: session.user.username || 'Your Name',
-      sender_company: 'Your Company',
-      target_domain: domain,
-      cv_profile
-    });
+    // Use provided email content if available (user edited), otherwise generate using AI
+    let emailContent;
+    if (email_subject && email_description) {
+      console.log('Using provided email content (user edited)...');
+      emailContent = {
+        subject: email_subject,
+        description: email_description,
+        html_body: email_description.replace(/\n/g, '<br>')
+      };
+    } else {
+      console.log('Generating email content using AI...');
+      emailContent = await generateEmailContent({
+        purpose,
+        recipient_type,
+        industry,
+        tone,
+        key_points,
+        call_to_action,
+        sender_name: session.user.username || 'Your Name',
+        sender_company: 'Your Company',
+        target_domain: domain,
+        target_company,
+        cv_profile,
+        cv_raw_text
+      });
+    }
 
     // Create campaign ID
     const campaign_id = `campaign_${user_id}_${Date.now()}`;
@@ -212,7 +247,8 @@ export async function POST(req: NextRequest) {
       emailsToSend.map(r => r.email),
       {
         subject: emailContent.subject,
-        description: (emailContent as any).description || (emailContent as any).preview || ''
+        description: (emailContent as any).description || (emailContent as any).preview || '',
+        html_body: (emailContent as any).html_body || (emailContent as any).description || ''
       },
       user_id,
       campaign_id,
@@ -249,11 +285,17 @@ export async function POST(req: NextRequest) {
     }, { status: 200 });
 
   } catch (error) {
-    console.error('Error in AI email campaign:', error);
+    console.error('=== ERROR IN AI EMAIL CAMPAIGN ===');
+    console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error);
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('=== END ERROR ===');
+    
     return NextResponse.json(
       { 
         error: "Internal server error",
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
       },
       { status: 500 }
     );

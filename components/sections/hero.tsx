@@ -28,7 +28,7 @@ export function HeroSection() {
             </Link>
           </Button>
           <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
-            <Link href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank" rel="noopener noreferrer">
+            <Link href="https://www.youtube.com/watch?v=ZfEK3WP73eY" target="_blank" rel="noopener noreferrer">
               Watch Demo
             </Link>
           </Button>

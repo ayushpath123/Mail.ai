@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Send, Sparkles, Users, Target, MessageSquare, CheckCircle, AlertCircle, Clock, Mail, TrendingUp, User } from "lucide-react";
+import { Send, Sparkles, Users, Target, MessageSquare, CheckCircle, AlertCircle, Clock, Mail, TrendingUp, User, Upload, FileText, Loader2 } from "lucide-react";
 
 interface CampaignStatus {
   status: string;
@@ -25,6 +25,64 @@ interface EmailContent {
   preview: string | any; // Allow for different types of content
 }
 
+function deriveCompanyFromDomain(domain: string) {
+  if (!domain) return "";
+  const cleaned = domain
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .split("/")[0];
+
+  if (!cleaned) return "";
+
+  const parts = cleaned.split(".").filter(Boolean);
+  if (parts.length === 0) return "";
+
+  const multiPartSuffixes = ["co.uk", "co.in", "com.au", "com.br", "com.sg"];
+  const lastTwo = parts.slice(-2).join(".");
+  let companyPart = "";
+
+  if (multiPartSuffixes.includes(lastTwo) && parts.length >= 3) {
+    companyPart = parts[parts.length - 3];
+  } else if (parts.length === 1) {
+    companyPart = parts[0];
+  } else {
+    companyPart = parts[parts.length - 2];
+  }
+
+  return companyPart
+    .split("-")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function validateCVProfile(cvData: any): boolean {
+  if (!cvData) return false;
+
+  const hasBasicInfo = cvData.fullName && cvData.email && cvData.phone;
+  const hasSummary = cvData.summary && cvData.summary.length > 20;
+  const hasExperience = cvData.experience && cvData.experience.length > 0;
+  const hasEducation = cvData.education && cvData.education.length > 0;
+  const hasSkills = cvData.technicalSkills && cvData.technicalSkills.length > 0;
+
+  const experienceComplete = cvData.experience?.every(
+    (exp: any) => exp.company && exp.position && exp.duration && exp.description
+  );
+  const educationComplete = cvData.education?.every(
+    (edu: any) => edu.institution && edu.degree && edu.field && edu.duration
+  );
+
+  return (
+    hasBasicInfo &&
+    hasSummary &&
+    hasExperience &&
+    hasEducation &&
+    hasSkills &&
+    experienceComplete &&
+    educationComplete
+  );
+}
+
 export function AICampaignBuilder() {
   const [isLoading, setIsLoading] = useState(false);
   const [campaignStatus, setCampaignStatus] = useState<CampaignStatus | null>(null);
@@ -36,13 +94,18 @@ export function AICampaignBuilder() {
   const [editableContent, setEditableContent] = useState<string>("");
   const [cvProfileComplete, setCvProfileComplete] = useState<boolean | null>(null);
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+  const [companyNameTouched, setCompanyNameTouched] = useState(false);
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [isAnalyzingCV, setIsAnalyzingCV] = useState(false);
+  const [cvAnalysis, setCvAnalysis] = useState<{
+    skills: string[];
+    experience: string[];
+    education: string;
+    summary: string;
+  } | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("target");
 
-  // Check CV profile completion on component mount
-  useEffect(() => {
-    checkCVProfileCompletion();
-  }, []);
-
-  const checkCVProfileCompletion = async () => {
+  const checkCVProfileCompletion = useCallback(async () => {
     try {
       const response = await fetch('/api/backend/v2/cv-profile');
       if (response.ok) {
@@ -58,37 +121,19 @@ export function AICampaignBuilder() {
     } finally {
       setIsCheckingProfile(false);
     }
-  };
+  }, []);
 
-  const validateCVProfile = (cvData: any): boolean => {
-    if (!cvData) return false;
-    
-    // Check required fields
-    const hasBasicInfo = cvData.fullName && cvData.email && cvData.phone;
-    const hasSummary = cvData.summary && cvData.summary.length > 20;
-    const hasExperience = cvData.experience && cvData.experience.length > 0;
-    const hasEducation = cvData.education && cvData.education.length > 0;
-    const hasSkills = cvData.technicalSkills && cvData.technicalSkills.length > 0;
-    
-    // Check if experience entries are complete
-    const experienceComplete = cvData.experience?.every((exp: any) => 
-      exp.company && exp.position && exp.duration && exp.description
-    );
-    
-    // Check if education entries are complete
-    const educationComplete = cvData.education?.every((edu: any) => 
-      edu.institution && edu.degree && edu.field && edu.duration
-    );
-    
-    return hasBasicInfo && hasSummary && hasExperience && hasEducation && 
-           hasSkills && experienceComplete && educationComplete;
-  };
+  // Check CV profile completion on component mount
+  useEffect(() => {
+    checkCVProfileCompletion();
+  }, [checkCVProfileCompletion]);
 
-  // Form state
+  // Form state - defined early so it can be used in useCallback
   const [formData, setFormData] = useState({
     first_name: "Ayush",
     last_name: "Pathak",
     domain: "dentsu.com",
+    company_name: "Dentsu",
     purpose: "I am interested in a role at Dentsu as a software engineer.",
     recipient_type: "HR",
     campaign_name: "HR Outreach",
@@ -98,6 +143,106 @@ export function AICampaignBuilder() {
     call_to_action: "",
     personalize_emails: true,
   });
+
+  // Generate personalized content based on CV - defined after formData
+  const generatePersonalizedContent = useCallback(async (purpose: string, recipient: string, campaignName: string) => {
+    try {
+      console.log('Generating personalized content with AI...');
+      
+      // Use the AI email generator directly
+      const requestBody = {
+        purpose: formData.purpose,
+        recipient_type: formData.recipient_type,
+        industry: formData.industry,
+        tone: formData.tone,
+        key_points: formData.key_points,
+        call_to_action: formData.call_to_action,
+        sender_name: formData.first_name + ' ' + formData.last_name,
+        sender_company: 'Your Company',
+        target_domain: formData.domain,
+        target_company: formData.company_name || deriveCompanyFromDomain(formData.domain)
+      };
+
+      console.log('AI generation request:', requestBody);
+
+      // Call the AI generation endpoint
+      const response = await fetch('/api/backend/v2/generate-email-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        console.log('AI generation failed, falling back to template');
+        throw new Error('Failed to generate AI content');
+      }
+      
+      const data = await response.json();
+      console.log('AI generated content:', data);
+      
+      return {
+        subject: data.subject || `Regarding: ${typeof purpose === 'string' ? purpose.substring(0, 40) : purpose}`,
+        preview: data.description || data.body || `Dear ${recipient},\n\n${purpose}\n\nBest regards,\n${formData.first_name} ${formData.last_name}`
+      };
+    } catch (error) {
+      console.error('Error generating personalized content:', error);
+      // Fallback to dummy content
+      return generateDummyContent(purpose, recipient);
+    }
+  }, [formData]);
+
+  // Auto-load email template when switching to Content or Preview tabs
+  useEffect(() => {
+    if ((activeTab === "content" || activeTab === "preview") && !emailContent && !isLoading) {
+      // Only load if we have the required form data
+      if (formData.purpose && formData.recipient_type && formData.campaign_name) {
+        generatePersonalizedContent(formData.purpose, formData.recipient_type, formData.campaign_name)
+          .then(content => setEmailContent(content))
+          .catch(error => console.error('Error loading email template:', error));
+      }
+    }
+  }, [activeTab, emailContent, isLoading, formData.purpose, formData.recipient_type, formData.campaign_name, generatePersonalizedContent]);
+
+  // Fake CV analysis function
+  const analyzeCV = async (file: File) => {
+    setIsAnalyzingCV(true);
+    setCvFile(file);
+    
+    // Simulate analysis delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Fake analysis results
+    const fakeAnalysis = {
+      skills: [
+        "Next.js", "React.js", "TypeScript", "Node.js", 
+        "PostgreSQL", "Prisma", "Redis", "WebRTC",
+        "AI/ML", "LangChain", "OpenAI", "Groq SDK"
+      ],
+      experience: [
+        "Software Engineering Intern at VideoSDK - Real-time communication products",
+        "Software Engineering Intern at Dentsu - AI chatbots and monitoring dashboards",
+        "Full-stack development with modern web technologies"
+      ],
+      education: "B.Tech in Data Science & Artificial Intelligence at IIIT Dharwad",
+      summary: "Experienced software engineer with expertise in full-stack development, AI/ML integration, and real-time systems. Built scalable applications using modern technologies."
+    };
+    
+    setCvAnalysis(fakeAnalysis);
+    setIsAnalyzingCV(false);
+  };
+
+  const handleCVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        analyzeCV(file);
+      } else {
+        alert('Please upload a PDF file');
+      }
+    }
+  };
 
   // Dummy email generator with proper professional patterns
   function generateDummyEmails(first: string, last: string, domain: string) {
@@ -214,8 +359,12 @@ export function AICampaignBuilder() {
         key_points: formData.key_points,
         call_to_action: formData.call_to_action,
         campaign_name: campaignName,
+        target_company: formData.company_name || deriveCompanyFromDomain(formData.domain),
         personalize_emails: formData.personalize_emails,
-        recipient_data: emails.map(email => ({ email }))
+        recipient_data: emails.map(email => ({ email })),
+        // Pass the email content if available (edited or generated)
+        email_subject: content.subject,
+        email_description: typeof content.preview === 'string' ? content.preview : content.preview || ''
       };
       
       console.log('=== FRONTEND REQUEST BODY ===');
@@ -331,7 +480,6 @@ export function AICampaignBuilder() {
   const startCampaign = async () => {
     setIsLoading(true);
     setCampaignStatus(null);
-    setEmailContent(null);
     setGeneratedEmails([]);
 
     try {
@@ -340,10 +488,16 @@ export function AICampaignBuilder() {
       const emails = await generateRealEmails(formData.first_name, formData.last_name, formData.domain);
       setGeneratedEmails(emails);
       
-      // Step 2: Generate real email content using AI
-      console.log('Generating email content...');
-      const content = await generatePersonalizedContent(formData.purpose, formData.recipient_type, formData.campaign_name);
-      setEmailContent(content);
+      // Step 2: Use existing email content if available (edited or previously generated), otherwise generate new
+      let content: EmailContent;
+      if (emailContent && emailContent.subject && emailContent.preview) {
+        console.log('Using existing email content (may be edited)...');
+        content = emailContent;
+      } else {
+        console.log('Generating email content...');
+        content = await generatePersonalizedContent(formData.purpose, formData.recipient_type, formData.campaign_name);
+        setEmailContent(content);
+      }
       
       // Step 3: Create real campaign
       console.log('Creating campaign...');
@@ -402,54 +556,7 @@ export function AICampaignBuilder() {
   };
 
   // CV upload and analysis removed
-
-  // Generate personalized content based on CV
-  const generatePersonalizedContent = async (purpose: string, recipient: string, campaignName: string) => {
-    try {
-      console.log('Generating personalized content with AI...');
-      
-      // Use the AI email generator directly
-      const requestBody = {
-        purpose: formData.purpose,
-        recipient_type: formData.recipient_type,
-        industry: formData.industry,
-        tone: formData.tone,
-        key_points: formData.key_points,
-        call_to_action: formData.call_to_action,
-        sender_name: formData.first_name + ' ' + formData.last_name,
-        sender_company: 'Your Company',
-        target_domain: formData.domain // Pass the target company domain
-      };
-
-      console.log('AI generation request:', requestBody);
-
-      // Call the AI generation endpoint
-      const response = await fetch('/api/backend/v2/generate-email-content', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-      
-      if (!response.ok) {
-        console.log('AI generation failed, falling back to template');
-        throw new Error('Failed to generate AI content');
-      }
-      
-      const data = await response.json();
-      console.log('AI generated content:', data);
-      
-      return {
-        subject: data.subject || `Regarding: ${typeof purpose === 'string' ? purpose.substring(0, 40) : purpose}`,
-        preview: data.description || data.body || `Dear ${recipient},\n\n${purpose}\n\nBest regards,\n${formData.first_name} ${formData.last_name}`
-      };
-    } catch (error) {
-      console.error('Error generating personalized content:', error);
-      // Fallback to dummy content
-      return generateDummyContent(purpose, recipient);
-    }
-  };
+  // Note: generatePersonalizedContent is now defined earlier using useCallback
 
   // Show loading while checking profile
   if (isCheckingProfile) {
@@ -467,80 +574,35 @@ export function AICampaignBuilder() {
     );
   }
 
-  // Show CV profile requirement if incomplete
-  if (cvProfileComplete === false) {
-    return (
-      <div className="w-full max-w-3xl mx-auto space-y-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <Card className="border-orange-200 bg-orange-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-700">
-                <AlertCircle className="h-5 w-5" />
-                Complete Your CV Profile Required
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-orange-600">
-                Before you can start an AI email campaign, you need to complete your CV profile. 
-                This information helps our AI generate highly personalized and effective emails for you.
-              </p>
-              
-              <div className="bg-white p-4 rounded-lg border border-orange-200">
-                <h4 className="font-semibold mb-3 text-orange-700">Required Information:</h4>
-                <ul className="space-y-2 text-sm text-orange-600">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Personal Information (Name, Email, Phone)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Professional Summary (20+ characters)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    At least one Work Experience
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    At least one Education entry
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Technical Skills
-                  </li>
-                </ul>
-              </div>
-
-              <div className="flex gap-4">
-                <Button asChild className="flex-1">
-                  <a href="/profile">
-                    <User className="h-4 w-4 mr-2" />
-                    Complete CV Profile
-                  </a>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={checkCVProfileCompletion}
-                  disabled={isCheckingProfile}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2">
-                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                    <path d="M21 3v5h-5"/>
-                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                    <path d="M8 16H3v5"/>
-                  </svg>
-                  Refresh Status
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6">
+      {/* Warning banner if CV profile is incomplete */}
+      {cvProfileComplete === false && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <Alert className="border-orange-200 bg-orange-50">
+            <AlertCircle className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="text-orange-800">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <strong>CV Profile Incomplete:</strong> For better email personalization, consider completing your CV profile or uploading your CV. 
+                  <Button asChild variant="link" className="h-auto p-0 ml-2 text-orange-700 underline">
+                    <a href="/profile">Complete Profile</a>
+                  </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCvProfileComplete(null)}
+                  className="ml-4 text-orange-700 hover:text-orange-900"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+      
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
         <Card>
           <CardHeader>
@@ -553,7 +615,7 @@ export function AICampaignBuilder() {
             </p>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="target" className="w-full">
+            <Tabs defaultValue="target" value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="target">Target</TabsTrigger>
                 <TabsTrigger value="content">Content</TabsTrigger>
@@ -581,16 +643,108 @@ export function AICampaignBuilder() {
                   </div>
                 </div>
 
-                {/* CV upload removed for performance */}
+                {/* CV Upload Section */}
+                <div className="space-y-2">
+                  <Label htmlFor="cv_upload">Upload CV (PDF) - Optional</Label>
+                  <div className="flex items-center gap-4">
+                    <Input
+                      id="cv_upload"
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleCVUpload}
+                      className="cursor-pointer"
+                      disabled={isAnalyzingCV}
+                    />
+                    {cvFile && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <FileText className="h-4 w-4" />
+                        <span>{cvFile.name}</span>
+                      </div>
+                    )}
+                  </div>
+                  {isAnalyzingCV && (
+                    <div className="flex items-center gap-2 text-sm text-blue-600">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Analyzing CV...</span>
+                    </div>
+                  )}
+                  {cvAnalysis && !isAnalyzingCV && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        <h4 className="font-semibold text-green-800">CV Analysis Complete</h4>
+                      </div>
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <strong className="text-green-800">Skills Detected:</strong>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {cvAnalysis.skills.map((skill, idx) => (
+                              <span key={idx} className="px-2 py-1 bg-white rounded border border-green-200 text-green-700">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <strong className="text-green-800">Experience:</strong>
+                          <ul className="list-disc list-inside mt-1 space-y-1 text-green-700">
+                            {cvAnalysis.experience.map((exp, idx) => (
+                              <li key={idx}>{exp}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <strong className="text-green-800">Education:</strong>
+                          <p className="text-green-700 mt-1">{cvAnalysis.education}</p>
+                        </div>
+                        <div>
+                          <strong className="text-green-800">Summary:</strong>
+                          <p className="text-green-700 mt-1">{cvAnalysis.summary}</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
 
-                <div>
-                  <Label htmlFor="domain">Target Domain *</Label>
-                  <Input
-                    id="domain"
-                    value={formData.domain}
-                    onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                    placeholder="e.g., company.com"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="domain">Target Domain *</Label>
+                    <Input
+                      id="domain"
+                      value={formData.domain}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFormData((prev) => {
+                          const derivedName = deriveCompanyFromDomain(value);
+                          return {
+                            ...prev,
+                            domain: value,
+                            company_name:
+                              companyNameTouched && prev.company_name
+                                ? prev.company_name
+                                : derivedName || prev.company_name
+                          };
+                        });
+                      }}
+                      placeholder="e.g., company.com"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="company_name">Target Company (optional)</Label>
+                    <Input
+                      id="company_name"
+                      value={formData.company_name}
+                      onChange={(e) => {
+                        setCompanyNameTouched(true);
+                        setFormData({ ...formData, company_name: e.target.value });
+                      }}
+                      placeholder="e.g., Dentsu"
+                    />
+                  </div>
                 </div>
               </TabsContent>
               <TabsContent value="content" className="space-y-4">
