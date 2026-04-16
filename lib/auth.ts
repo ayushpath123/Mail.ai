@@ -1,7 +1,6 @@
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GitHubProvider from 'next-auth/providers/github';
 import GoogleProvider from 'next-auth/providers/google';
-import bcrypt from 'bcrypt'; // Import bcrypt for hashing
 import { db } from "@/lib/prisma";
 
 export const NEXT_AUTH = {
@@ -16,45 +15,21 @@ export const NEXT_AUTH = {
       //@ts-ignore
       async authorize(credentials) {
         try {
-          if (!credentials?.email || !credentials?.password) {
-            return null; // Return null if email or password is missing
-          }
-          const user = await db.user.findUnique({
-            where: { email: credentials.email },
-          });
-          if (!user) {
-            const hashedPassword = await bcrypt.hash(credentials.password, 10);
-            const newUser = await db.user.create({
-              data: {
-                email: credentials.email,
-                password: hashedPassword, 
-                username: credentials.email.split('@')[0],
-                plan: 'FREE',
-                imageUrl: "",
-              },
-            });
-
-            return {
-              id: newUser.id,
-              username: newUser.username,
-              email: newUser.email,
-            };
+          if (!credentials?.email) {
+            return null;
           }
 
-          // Sign-in: Compare provided password with hashed password
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-          if (!isPasswordValid) {
-            return null; // Return null if password doesn't match
-          }
-
+          // Demo-safe hardcoded auth: accept any email/password combo.
+          // This avoids DB/OAuth/env dependency failures during presentations.
+          const username = credentials.email.split('@')[0] || "demo";
           return {
-            id: user.id,
-            username: user.username,
-            email: user.email,
+            id: "demo-user-id",
+            username,
+            email: credentials.email,
           };
         } catch (error) {
           console.error('Error during authorization:', error);
-          return null; // Return null in case of an error
+          return null;
         }
       },
     }),
@@ -126,10 +101,7 @@ export const NEXT_AUTH = {
   },
   callbacks: {
     async signIn({ user }:any) {
-      // Prevent sign-in for specific users (e.g., random@gmail.com)
-      if (user.email === "random@gmail.com") {
-        return false;
-      }
+      // Demo mode: allow all users.
       return true;
     },
     //@ts-ignore

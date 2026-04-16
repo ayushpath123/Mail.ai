@@ -25,6 +25,8 @@ interface EmailContent {
   preview: string | any; // Allow for different types of content
 }
 
+const DEMO_RECIPIENT_EMAIL = "apathak@entnt.in";
+
 function deriveCompanyFromDomain(domain: string) {
   if (!domain) return "";
   const cleaned = domain
@@ -132,11 +134,11 @@ export function AICampaignBuilder() {
   const [formData, setFormData] = useState({
     first_name: "Ayush",
     last_name: "Pathak",
-    domain: "dentsu.com",
-    company_name: "Dentsu",
-    purpose: "I am interested in a role at Dentsu as a software engineer.",
+    domain: "entnt.in",
+    company_name: "ENTNT",
+    purpose: "I am interested in a software engineering role at ENTNT.",
     recipient_type: "HR",
-    campaign_name: "HR Outreach",
+    campaign_name: "ENTNT Outreach",
     industry: "",
     tone: "professional",
     key_points: [] as string[],
@@ -275,39 +277,11 @@ export function AICampaignBuilder() {
   // Real email generator using Hunter API (no auth required)
   async function generateRealEmails(first: string, last: string, domain: string) {
     try {
-      const response = await fetch('/api/backend/v2/mailnode', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          first_name: first,
-          last_name: last,
-          domain: domain,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate emails');
-      }
-      
-      const data = await response.json();
-      // Parse the emails from the response
-      const emailString = data.emails || '';
-      const emails = emailString
-        .split(',')
-        .map((email: string) => email.trim())
-        .filter((email: string) => {
-          // Filter for valid email addresses
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          return emailRegex.test(email) && !email.includes('Grog emails') && !email.includes('Here are');
-        });
-      
-      return emails.length > 0 ? emails : generateDummyEmails(first, last, domain);
+      // Demo mode is intentionally pinned to a single verified recipient.
+      return [DEMO_RECIPIENT_EMAIL];
     } catch (error) {
       console.error('Error generating emails:', error);
-      // Fallback to dummy emails
-      return generateDummyEmails(first, last, domain);
+      return [DEMO_RECIPIENT_EMAIL];
     }
   }
 
@@ -745,6 +719,9 @@ export function AICampaignBuilder() {
                       placeholder="e.g., Dentsu"
                     />
                   </div>
+                </div>
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                  Demo recipient is fixed to <strong>{DEMO_RECIPIENT_EMAIL}</strong>. The company fields above are still used to personalize the AI-generated email.
                 </div>
               </TabsContent>
               <TabsContent value="content" className="space-y-4">

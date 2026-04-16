@@ -6,8 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Lock, User, Github, Loader2, Chrome, LogOut } from "lucide-react";
-import axios from "axios";
+import { Mail, Lock, User, Github, Loader2, Chrome } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import { signIn, signOut, useSession } from "next-auth/react";
 
@@ -29,15 +28,16 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post('/api/backend/v2/userinfo/new_user', {
-        name,
+      // Demo mode: create account flow uses credential sign-in directly.
+      const result = await signIn('credentials', {
+        redirect: false,
         email,
         password,
       });
-      if (res.status === 200) {
-        router.push('/');
+      if (result?.error) {
+        alert('Could not create demo account. Please try again.');
       } else {
-        window.location.reload();
+        router.push('/');
       }
     } catch (e) {
       console.log(e);
@@ -68,7 +68,7 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
   };
 
   const handleOAuthSignIn = (provider: 'google' | 'github') => {
-    signIn(provider, { callbackUrl: '/' });
+    alert('Demo mode is enabled. Please use email/password sign in.');
   };
 
   const handleLogout = () => {

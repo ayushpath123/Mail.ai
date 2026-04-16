@@ -149,19 +149,28 @@ export async function POST(req: NextRequest) {
     const dailyLimit = planLimits[user.plan as keyof typeof planLimits] || 1000;
     const emailsSentToday = todayEmails?.noOfEmails || 0;
 
-    // Generate email addresses
-    console.log('Generating email addresses...');
-    const generatedEmails = await Groqfns({
-      first_name,
-      last_name,
-      domain
-    });
+    let generatedEmails: string[] = [];
+    const explicitRecipients = recipient_data && recipient_data.length > 0
+      ? recipient_data.map((recipient) => recipient.email)
+      : null;
 
-    if (!generatedEmails || generatedEmails.length === 0) {
-      return NextResponse.json(
-        { error: "Failed to generate email addresses" },
-        { status: 500 }
-      );
+    if (explicitRecipients) {
+      generatedEmails = explicitRecipients;
+      console.log('Using explicit recipient list:', generatedEmails);
+    } else {
+      console.log('Generating email addresses...');
+      generatedEmails = await Groqfns({
+        first_name,
+        last_name,
+        domain
+      });
+
+      if (!generatedEmails || generatedEmails.length === 0) {
+        return NextResponse.json(
+          { error: "Failed to generate email addresses" },
+          { status: 500 }
+        );
+      }
     }
 
     // Check if we would exceed daily limit
@@ -239,7 +248,9 @@ export async function POST(req: NextRequest) {
     const campaign_id = `campaign_${user_id}_${Date.now()}`;
 
     // Prepare emails for sending
-    const emailsToSend = recipient_data || generatedEmails.map(email => ({ email }));
+    const emailsToSend = recipient_data && recipient_data.length > 0
+      ? recipient_data
+      : generatedEmails.map(email => ({ email }));
     
     // Send emails directly (no queue/redis)
     console.log('Sending emails directly...');
