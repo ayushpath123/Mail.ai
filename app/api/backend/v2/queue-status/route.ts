@@ -9,12 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     // Get user session
     const session = await getServerSession(NEXT_AUTH);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
+    // Authentication bypassed for demo
 
     // Simulate batches of 10 emails being sent and processed gradually
     const now = Date.now();

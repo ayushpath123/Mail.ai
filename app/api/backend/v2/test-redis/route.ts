@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       port: 6379,
       username: 'default',
       password: REDIS_TOKEN,
-      tls: true,
+      tls: {},
       connectTimeout: 10000,
       enableReadyCheck: false,
       maxRetriesPerRequest: null

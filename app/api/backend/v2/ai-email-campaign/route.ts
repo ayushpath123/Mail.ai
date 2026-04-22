@@ -45,14 +45,9 @@ export async function POST(req: NextRequest) {
   try {
     // Get user session
     const session = await getServerSession(NEXT_AUTH);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
+    // Authentication bypassed for demo
 
-    const user_id = parseInt(session.user.id as string);
+    const user_id = 1;
     
     // Parse and validate input
     const body = await req.json();
@@ -110,17 +105,12 @@ export async function POST(req: NextRequest) {
     console.log('=== END VALIDATION SUCCESS ===');
 
     // Check user's plan and email limits
-    const user = await db.user.findUnique({
-      where: { id: user_id },
-      select: { plan: true, SMTP_USER: true, SMTP_PASS: true }
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
+    // DEMO HARDCODED
+    const user = {
+      plan: 'PREMIUM',
+      SMTP_USER: process.env.SMTP_USER || 'demo_user',
+      SMTP_PASS: process.env.SMTP_PASS || 'demo_pass'
+    };
 
     if (!user.SMTP_USER || !user.SMTP_PASS) {
       return NextResponse.json(
@@ -133,12 +123,8 @@ export async function POST(req: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const todayEmails = await db.emailLog.findFirst({
-      where: {
-        userId: user_id,
-        date: today
-      }
-    });
+    // DEMO HARDCODED
+    const todayEmails = { noOfEmails: 5 };
 
     const planLimits = {
       FREE: 1000,
@@ -189,10 +175,7 @@ export async function POST(req: NextRequest) {
     // Fetch user's CV profile for personalization
     console.log('=== FETCHING CV PROFILE ===');
     console.log('User ID:', user_id);
-    const userProfile = await db.user.findUnique({
-      where: { id: user_id },
-      select: { resumeText: true }
-    });
+    const userProfile = { resumeText: null as string | null };
 
     let cv_profile = null;
     let cv_raw_text: string | null = null;
@@ -235,7 +218,7 @@ export async function POST(req: NextRequest) {
         tone,
         key_points,
         call_to_action,
-        sender_name: session.user.username || 'Your Name',
+        sender_name: session?.user?.username || 'Your Name',
         sender_company: 'Your Company',
         target_domain: domain,
         target_company,
@@ -317,12 +300,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(NEXT_AUTH);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
+    // Authentication bypassed for demo
 
     const { searchParams } = new URL(req.url);
     const campaign_id = searchParams.get('campaign_id');

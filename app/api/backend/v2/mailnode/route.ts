@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     Thank you for considering my application. I would be grateful for the opportunity to contribute and learn.
     
     Best regards,  
-    Ayush Pathak`
+    ${first_name} ${last_name}`
     }
 
     // If custom prompt is provided, generate personalized content
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
     // Only send emails if SMTP credentials are provided
     if (body.SMTP_USER && body.SMTP_PASSWORD && body.user_id) {
       const user_details={
-        useremail:"ayushpathak308@gmail.com",
+        useremail: body.SMTP_USER,
         user_id: body.user_id
       }
 

@@ -62,7 +62,7 @@ const createRedisClients = () => {
     port: 6379,
     username: 'default',
     password: REDIS_TOKEN,
-    tls: true,
+    tls: {},
     connectTimeout: 3000,
     enableReadyCheck: false,
     maxRetriesPerRequest: 1,
@@ -188,9 +188,9 @@ const processEmailJob = async (job: Job<EmailJobData>): Promise<{ success: boole
     // Create transporter
     console.log('Creating email transporter...');
     const transporter: Transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
       auth: {
         user: user.SMTP_USER,
         pass: user.SMTP_PASS

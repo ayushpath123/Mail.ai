@@ -95,18 +95,18 @@ export const handleUserEmails = async ({ user_id, groqemails, mail_body }: Setup
         try {
           // Email configuration
           const transporter: Transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 587,
-            secure: false,
+            host: process.env.SMTP_HOST || 'smtp.gmail.com',
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: process.env.SMTP_SECURE === 'true',
             auth: {
-              user: 'ayushpathak308@gmail.com',
-              pass: 'mkol tlrl vhta tagx'
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS
             }
           });
 
           // Send email
           const info = await transporter.sendMail({
-            from: 'ayushpathak308@gmail.com',
+            from: process.env.SMTP_USER,
             to: job.data.email,
             subject: job.data.mail_body.subject,
             html: job.data.mail_body.description

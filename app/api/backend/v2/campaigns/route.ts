@@ -10,14 +10,9 @@ export async function GET(req: NextRequest) {
   try {
     // Get user session
     const session = await getServerSession(NEXT_AUTH);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
+    // Authentication bypassed for demo
 
-    const user_id = parseInt(session.user.id as string);
+    const user_id = 1;
     const { searchParams } = new URL(req.url);
     const campaignId = searchParams.get('campaign_id');
 

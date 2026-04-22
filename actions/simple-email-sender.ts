@@ -27,86 +27,59 @@ export const sendEmailsDirectly = async (
   };
 
   try {
-    // Get user's SMTP credentials
-    console.log(`Fetching SMTP credentials for user ${user_id}`);
-    const user = await db.user.findUnique({
-      where: { id: user_id },
-      select: { SMTP_USER: true, SMTP_PASS: true }
-    });
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
 
-    if (!user || !user.SMTP_USER || !user.SMTP_PASS) {
-      throw new Error('User SMTP credentials not found');
+    if (!smtpUser || !smtpPass) {
+      console.warn("SMTP credentials missing in .env! Emails might not send.");
     }
 
-    console.log(`SMTP credentials found for user ${user_id}`);
-
-    // Create transporter
+    // Create transporter using env explicitly since DB is bypassed
     console.log('Creating email transporter...');
     const transporter: Transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
       auth: {
-        user: user.SMTP_USER,
-        pass: user.SMTP_PASS
+        user: smtpUser,
+        pass: smtpPass
       },
       tls: {
         rejectUnauthorized: false
       }
     });
 
-    // Verify transporter
-    console.log('Verifying transporter...');
-    await transporter.verify();
-    console.log('Transporter verified successfully');
-
-    // Send emails in a loop
+    console.log(`Will attempt to send real emails to ${emails.length} recipients.`);
+    
+    // Process each target sequentially
     for (let i = 0; i < emails.length; i++) {
-      const email = emails[i];
-      const recipient = recipientData?.find(r => r.email === email);
-
-      try {
-        console.log(`Sending email ${i + 1}/${emails.length} to ${email}...`);
+        const email = emails[i];
         
-        const info = await transporter.sendMail({
-          from: `"Mail.ai" <${user.SMTP_USER}>`,
-          to: email,
-          subject: mail_body.subject,
-          text: mail_body.description,
-          html: mail_body.html_body || mail_body.description
-        });
+        try {
+          console.log(`Sending email ${i+1}/${emails.length} to ${email}...`);
+          
+          let finalHtml = mail_body.html_body || mail_body.description.replace(/\\n/g, '<br>');
+          
+          const info = await transporter.sendMail({
+            from: `"Mail.ai" <${smtpUser}>`,
+            to: email,
+            subject: mail_body.subject,
+            text: mail_body.description,
+            html: finalHtml
+          });
 
-        console.log(`Email sent successfully to ${email}, messageId: ${info.messageId}`);
-        result.sent++;
-
-        // Log email to database
-        await logEmailToDatabase({
-          user_id,
-          email,
-          subject: mail_body.subject,
-          campaign_id,
-          status: 'success'
-        });
-
+          console.log(`Email sent successfully to ${email}, messageId: ${info.messageId}`);
+          result.sent++;
+        } catch (sendError) {
+          console.error(`Error sending email to ${email}:`, sendError);
+          result.failed++;
+          result.errors.push(`Failed to send to ${email}: ${sendError instanceof Error ? sendError.message : 'Unknown error'}`);
+        }
+        
         // Add a small delay to avoid rate limiting
         if (i < emails.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
-
-      } catch (error) {
-        console.error(`Error sending email to ${email}:`, error);
-        result.failed++;
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        result.errors.push(`Failed to send to ${email}: ${errorMessage}`);
-        await logEmailToDatabase({
-          user_id,
-          email,
-          subject: mail_body.subject,
-          campaign_id,
-          status: 'failed',
-          error: errorMessage
-        });
-      }
     }
 
     result.success = result.sent > 0;

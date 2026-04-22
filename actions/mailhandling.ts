@@ -14,7 +14,9 @@ type mail_type = {
 };
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -27,7 +29,7 @@ export async function handleEmails({ user_details, groqemails, mail_body, attach
   for (let i = 0; i < groqemails.length; i++) {
     const mailide = groqemails[i].replace(/\s+/g, "").toLowerCase();
     const mailOptions: nodemailer.SendMailOptions = {
-      from: `"Ayush Pathak" <${process.env.SMTP_USER}>`,
+      from: `"${user_details.useremail}" <${process.env.SMTP_USER}>`,
       to: mailide,
       subject,
       text: description,

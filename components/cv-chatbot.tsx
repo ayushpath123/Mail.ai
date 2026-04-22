@@ -15,6 +15,15 @@ interface Message {
   timestamp: Date;
 }
 
+function normalizeAssistantText(content: string): string {
+  return content
+    // Strip markdown emphasis/backticks/headers that look noisy in compact chat UIs.
+    .replace(/[*`#_~]/g, "")
+    // Normalize repeated blank lines for tighter chat layout.
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function CVChatbot() {
   const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
@@ -86,7 +95,7 @@ export function CVChatbot() {
       const data = await response.json();
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.response,
+        content: normalizeAssistantText(data.response || ""),
         timestamp: new Date(),
       };
 
@@ -159,7 +168,7 @@ export function CVChatbot() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-1/4 min-w-[360px] max-w-[450px] z-50"
+            className="fixed right-0 top-0 h-full w-[min(95vw,560px)] min-w-[380px] z-50"
           >
             <div className="h-full bg-white dark:bg-gray-900 border-l-2 border-black dark:border-white shadow-2xl flex flex-col">
               {/* Header */}

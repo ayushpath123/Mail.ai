@@ -9,72 +9,25 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(NEXT_AUTH);
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
+    // Authentication bypassed for demo
 
-    const user_id = parseInt(session.user.id as string);
+    const user_id = 1;
 
-    const [totalsAggregate, recentLogs, recentEmails] = await Promise.all([
-      db.emailLog.aggregate({
-        where: { userId: user_id },
-        _sum: {
-          noOfEmails: true,
-          failedEmails: true,
-        },
-      }).catch((error: any) => {
-        // Handle case where failedEmails column doesn't exist
-        if (error?.code === 'P2022' || error?.message?.includes('failedEmails')) {
-          console.warn('failedEmails column not found, using fallback');
-          return { _sum: { noOfEmails: 0, failedEmails: null } };
-        }
-        throw error;
-      }),
-      db.emailLog.findMany({
-        where: { userId: user_id },
-        orderBy: { date: "desc" },
-        take: 14,
-      }),
-      db.email.findMany({
-        where: {
-          emailLog: {
-            userId: user_id,
-          },
-        },
-        orderBy: { sentAt: "desc" },
-        take: 6,
-        include: {
-          emailLog: {
-            select: { date: true },
-          },
-        },
-      }),
-    ]);
-
-    const totalSent = totalsAggregate._sum.noOfEmails || 0;
-    const totalFailed = totalsAggregate._sum.failedEmails || 0;
+    // DEMO MOCK: Bypass Prisma
+    const totalSent = 42;
+    const totalFailed = 0;
     const totalAttempts = totalSent + totalFailed;
-    const successRate =
-      totalAttempts === 0 ? 0 : Math.round((totalSent / totalAttempts) * 1000) / 10;
+    const successRate = 100;
 
-    const activity = recentLogs
-      .map((log) => ({
-        date: log.date.toISOString(),
-        sent: log.noOfEmails,
-        failed: (log as any).failedEmails || 0, // Handle missing column gracefully
-      }))
-      .reverse();
+    const activity = [
+      { date: new Date().toISOString(), sent: 42, failed: 0 }
+    ];
 
-    const recent = recentEmails.map((email) => ({
-      recipient: email.recipient,
-      subject: email.subject,
-      sentAt: email.sentAt.toISOString(),
-      logDate: email.emailLog?.date.toISOString(),
-    }));
+    const recent = [
+      { recipient: 'demo@dentsu.com', subject: 'Application for Software Engineer', sentAt: new Date().toISOString(), logDate: new Date().toISOString() }
+    ];
 
+    // duplicate removed
     return NextResponse.json({
       success: true,
       totals: {

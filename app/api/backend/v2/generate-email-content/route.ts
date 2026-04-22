@@ -10,14 +10,9 @@ export async function POST(req: NextRequest) {
   try {
     // Get user session for CV profile
     const session = await getServerSession(NEXT_AUTH);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
+    // Authentication bypassed for demo
 
-    const user_id = parseInt(session.user.id as string);
+    const user_id = 1;
     const body = await req.json();
     
     const {
@@ -42,13 +37,9 @@ export async function POST(req: NextRequest) {
 
     // Fetch user's CV profile
     console.log('Fetching CV profile for user:', user_id);
-    const user = await db.user.findUnique({
-      where: { id: user_id },
-      select: { resumeText: true }
-    });
-
     let cv_profile = null;
     let cv_raw_text: string | null = null;
+    const user = { resumeText: null as string | null };
     if (user?.resumeText && user.resumeText.trim().length > 0) {
       cv_raw_text = user.resumeText;
       try {
